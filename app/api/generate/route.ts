@@ -3,11 +3,21 @@ import { fal } from '@fal-ai/client';
 
 export const runtime = 'nodejs';
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Falha desconhecida ao chamar a IA.';
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const key = process.env.FAL_KEY;
     if (!key) {
-      return NextResponse.json({ error: 'FAL_KEY não configurada.' }, { status: 500 });
+      return NextResponse.json({ error: 'FAL_KEY não configurada no servidor.' }, { status: 500 });
     }
 
     const body = await request.json();
@@ -41,18 +51,19 @@ export async function POST(request: Request) {
         num_images: 1,
         output_format: 'jpeg',
       },
-      logs: false,
+      logs: true,
     });
 
     const data = result.data as any;
     const image = data?.images?.[0];
     if (!image?.url) {
-      return NextResponse.json({ error: 'A IA não retornou uma imagem.' }, { status: 502 });
+      return NextResponse.json({ error: 'A IA não retornou uma imagem válida.' }, { status: 502 });
     }
 
     return NextResponse.json({ imageUrl: image.url, seed: data?.seed ?? null, requestId: result.requestId });
   } catch (error) {
-    console.error('generate error', error);
-    return NextResponse.json({ error: 'Falha ao gerar a imagem.' }, { status: 500 });
+    const detail = getErrorMessage(error);
+    console.error('generate error', detail, error);
+    return NextResponse.json({ error: `Falha na fal.ai: ${detail}` }, { status: 500 });
   }
 }
